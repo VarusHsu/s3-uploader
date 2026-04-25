@@ -18,7 +18,7 @@ var s3Client *s3.Client
 
 func main() {
 	region := envOrDefault("AWS_REGION", "us-east-1")
-	addr := envOrDefault("LISTEN_ADDR", ":8080")
+	addr := envOrDefault("LISTEN_ADDR", ":50001")
 
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(region),
