@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S3 Drag & Drop Uploader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <h1>S3 文件上传</h1>
+    <p class="muted">支持拖拽上传，先向后端获取预签名 URL，再直接上传到 S3。</p>
+
+    <section class="panel">
+      <label>
+        Bucket
+        <input id="bucket" type="text" placeholder="shuos-test-bucket" value="shuos-test-bucket">
+      </label>
+      <label>
+        对象前缀（可选）
+        <input id="prefix" type="text" placeholder="uploads/2026/">
+      </label>
+      <label>
+        API Base（可选）
+        <input id="apiBase" type="text" placeholder="http://localhost:50001">
+      </label>
+    </section>
+
+    <section id="dropZone" class="drop-zone" aria-label="文件拖拽上传区域">
+      <p>把文件拖到这里，或 <button id="pickBtn" type="button" class="link-btn">点击选择</button></p>
+      <input id="fileInput" type="file" hidden>
+    </section>
+
+    <section class="panel">
+      <h2>状态</h2>
+      <div class="progress-wrap" aria-label="上传进度">
+        <div class="progress-track">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="progressText" class="progress-text">0%</div>
+      </div>
+      <pre id="status" class="status">等待上传...</pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

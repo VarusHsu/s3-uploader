@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -33,6 +34,13 @@ func main() {
 	presignClient = s3.NewPresignClient(s3Client)
 
 	r := gin.Default()
+	r.Use(corsMiddleware(parseAllowedOrigins(envOrDefault("CORS_ALLOW_ORIGINS", "*"))))
+	r.GET("/", func(c *gin.Context) {
+		c.File("./web/index.html")
+	})
+	r.StaticFile("/app.js", "./web/app.js")
+	r.StaticFile("/styles.css", "./web/styles.css")
+	r.Static("/web", "./web")
 	r.POST("/upload", handleUploadURL)
 	r.POST("/upload-url", handleUploadURL)
 
@@ -89,6 +97,9 @@ func handleUploadURL(c *gin.Context) {
 
 	headers := map[string]string{}
 	for k, vals := range presignedReq.SignedHeader {
+		if strings.EqualFold(k, "host") {
+			continue
+		}
 		if len(vals) > 0 {
 			headers[k] = vals[0]
 		}
@@ -115,4 +126,48 @@ func envOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseAllowedOrigins(raw string) map[string]struct{} {
+	allowed := map[string]struct{}{}
+	for _, part := range strings.Split(raw, ",") {
+		origin := strings.TrimSpace(part)
+		if origin == "" {
+			continue
+		}
+		allowed[origin] = struct{}{}
+	}
+	if len(allowed) == 0 {
+		allowed["*"] = struct{}{}
+	}
+	return allowed
+}
+
+func corsMiddleware(allowedOrigins map[string]struct{}) gin.HandlerFunc {
+	allowAll := false
+	if _, ok := allowedOrigins["*"]; ok {
+		allowAll = true
+	}
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			if allowAll {
+				c.Header("Access-Control-Allow-Origin", "*")
+			} else if _, ok := allowedOrigins[origin]; ok {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Vary", "Origin")
+			}
+			c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			c.Header("Access-Control-Max-Age", "600")
+		}
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
 }
