@@ -29,7 +29,7 @@ func main() {
 	presignClient = s3.NewPresignClient(s3Client)
 
 	go func() {
-		log.Printf("starting MCP server on stdio")
+		log.Printf("starting MCP server on %s", mcpListenAddr)
 		if err := runMCPServer(context.Background()); err != nil {
 			log.Printf("mcp server stopped with error: %v", err)
 		}

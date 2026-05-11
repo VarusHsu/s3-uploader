@@ -20,7 +20,7 @@ go run .
 服务启动后会同时运行：
 
 - HTTP 服务（默认 `LISTEN_ADDR=:50001`）
-- MCP server（stdio）
+- MCP server（TCP `:50002`）
 
 MCP 暴露工具：`generate_upload_url`（逻辑与 `handleUploadURL` 一致）。
 

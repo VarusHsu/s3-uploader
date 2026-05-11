@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
+	"net"
 	"strconv"
 	"strings"
 )
+
+const mcpListenAddr = ":50002"
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -31,8 +33,33 @@ type rpcErrorObject struct {
 }
 
 func runMCPServer(ctx context.Context) error {
-	reader := bufio.NewReader(os.Stdin)
-	writer := bufio.NewWriter(os.Stdout)
+	ln, err := net.Listen("tcp", mcpListenAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", mcpListenAddr, err)
+	}
+	defer ln.Close()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+
+		go func(c net.Conn) {
+			defer c.Close()
+			if err := serveMCPConn(ctx, c); err != nil && err != io.EOF {
+				fmt.Printf("mcp client error: %v\n", err)
+			}
+		}(conn)
+	}
+}
+
+func serveMCPConn(ctx context.Context, conn net.Conn) error {
+	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
 
 	for {
 		payload, err := readMCPMessage(reader)
