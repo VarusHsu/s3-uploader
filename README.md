@@ -15,6 +15,43 @@ go run .
 
 启动后访问：`http://localhost:50001/`
 
+## MCP 模式（Model Context Protocol）
+
+服务启动后会同时运行：
+
+- HTTP 服务（默认 `LISTEN_ADDR=:50001`）
+- MCP server（stdio）
+
+MCP 暴露工具：`generate_upload_url`（逻辑与 `handleUploadURL` 一致）。
+
+```bash
+export AWS_REGION=us-west-2
+export LISTEN_ADDR=:50001
+
+go run .
+```
+
+
+支持的方法：
+
+- `initialize`
+- `tools/list`
+- `tools/call`
+
+`tools/call` 参数示例：
+
+```json
+{
+  "name": "generate_upload_url",
+  "arguments": {
+	"bucket": "your-bucket",
+	"key": "uploads/demo.txt",
+	"contentType": "text/plain",
+	"expiresIn": 120
+  }
+}
+```
+
 ## 前端上传流程
 
 1. 前端拖拽/选择文件。

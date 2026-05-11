@@ -2,16 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
@@ -33,6 +28,13 @@ func main() {
 	s3Client = s3.NewFromConfig(cfg)
 	presignClient = s3.NewPresignClient(s3Client)
 
+	go func() {
+		log.Printf("starting MCP server on stdio")
+		if err := runMCPServer(context.Background()); err != nil {
+			log.Printf("mcp server stopped with error: %v", err)
+		}
+	}()
+
 	r := gin.Default()
 	r.Use(corsMiddleware(parseAllowedOrigins(envOrDefault("CORS_ALLOW_ORIGINS", "*"))))
 	r.GET("/", func(c *gin.Context) {
@@ -51,74 +53,25 @@ func main() {
 }
 
 func handleUploadURL(c *gin.Context) {
-	bucket := c.PostForm("bucket")
-	if bucket == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: bucket"})
-		return
+	params := uploadURLParams{
+		Bucket:      c.PostForm("bucket"),
+		Key:         c.PostForm("key"),
+		Filename:    c.PostForm("filename"),
+		ContentType: c.PostForm("contentType"),
+		ExpiresIn:   c.PostForm("expiresIn"),
 	}
 
-	key := c.PostForm("key")
-	if key == "" {
-		filename := c.PostForm("filename")
-		if filename != "" {
-			key = filepath.Base(filename)
-		} else {
-			key = fmt.Sprintf("uploads/%d", time.Now().UnixNano())
-		}
-	}
-
-	contentType := c.DefaultPostForm("contentType", "application/octet-stream")
-	expiresInSec := int64(120)
-	if v := c.PostForm("expiresIn"); v != "" {
-		parsed, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expiresIn: must be an integer number of seconds"})
+	resp, err := generateUploadURL(c.Request.Context(), params)
+	if err != nil {
+		if _, ok := err.(inputError); ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		expiresInSec = parsed
-	}
-	if expiresInSec < 60 || expiresInSec > 3600 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "expiresIn must be between 60 and 3600 seconds"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	presignedReq, err := presignClient.PresignPutObject(c.Request.Context(), &s3.PutObjectInput{
-		Bucket:      aws.String(bucket),
-		Key:         aws.String(key),
-		ContentType: aws.String(contentType),
-		//IfNoneMatch: aws.String("*"),
-	}, func(opts *s3.PresignOptions) {
-		opts.Expires = time.Duration(expiresInSec) * time.Second
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate upload URL: %v", err)})
-		return
-	}
-
-	headers := map[string]string{}
-	for k, vals := range presignedReq.SignedHeader {
-		if strings.EqualFold(k, "host") {
-			continue
-		}
-		if len(vals) > 0 {
-			headers[k] = vals[0]
-		}
-	}
-
-	expiresAt := time.Now().Add(time.Duration(expiresInSec) * time.Second).UTC().Format(time.RFC3339)
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "presigned upload URL generated",
-		"uploadUrl":   presignedReq.URL,
-		"method":      presignedReq.Method,
-		"headers":     headers,
-		"bucket":      bucket,
-		"key":         key,
-		"contentType": contentType,
-		"singleUse":   true,
-		"expiresIn":   expiresInSec,
-		"expiresAt":   expiresAt,
-		"location":    fmt.Sprintf("s3://%s/%s", bucket, key),
-	})
+	c.JSON(http.StatusOK, resp)
 }
 
 func envOrDefault(key, fallback string) string {
